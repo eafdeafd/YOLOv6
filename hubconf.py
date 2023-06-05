@@ -86,6 +86,14 @@ def process_image(path, img_size, stride):
     image /= 255
     return image, img_src
 
+def process_given_image(img_src, img_size, stride):
+    # assumes already in BGR order
+    image = letterbox(img_src, img_size, stride=stride)[0]
+    image = image.transpose((2, 0, 1)) # HWC to CHW
+    image = torch.from_numpy(np.ascontiguousarray(image))
+    image = image.float()
+    image /= 255
+    return image, img_src
 
 class Detector(DetectBackend):
     def __init__(self,
@@ -119,8 +127,9 @@ class Detector(DetectBackend):
         prediction = {'boxes': boxes, 'scores': scores, 'labels': labels}
         return prediction
 
-    def predict(self, img_path):
-        img, img_src = process_image(img_path, self.img_size, 32)
+    def predict(self, img):
+        # was process_image, but we want to run this live.
+        img, img_src = process_given_image(img, self.img_size, 32)
         img = img.to(self.device)
         if len(img.shape) == 3:
             img = img[None]
@@ -131,14 +140,14 @@ class Detector(DetectBackend):
         return out
 
     def show_predict(self,
-                     img_path,
+                     img,
                      min_score=0.5,
                      figsize=(16, 16),
                      color='lawngreen',
                      linewidth=2):
-        prediction = self.predict(img_path)
+        prediction = self.predict(img)
         boxes, scores, classes = prediction['boxes'], prediction['scores'], prediction['classes']
-        visualize_detections(Image.open(img_path),
+        visualize_detections (img,
                              boxes, classes, scores,
                              min_score=min_score, figsize=figsize,  color=color, linewidth=linewidth
                              )
@@ -150,7 +159,7 @@ def create_model(model_name, class_names=CLASS_NAMES, device=DEVICE,
         os.mkdir(str(PATH_YOLOv6/'weights'))
     if not os.path.exists(str(PATH_YOLOv6/'weights') + f'/{model_name}.pt'):
         torch.hub.load_state_dict_from_url(
-            f"https://github.com/meituan/YOLOv6/releases/download/0.3.0/{model_name}.pt",
+            f"https://github.com/meituan/YOLOv6/releases/download/0.4.0/{model_name}.pt",
             str(PATH_YOLOv6/'weights'))
     return Detector(str(PATH_YOLOv6/'weights') + f'/{model_name}.pt',
                     class_names, device, img_size=img_size, conf_thres=conf_thres,
@@ -176,6 +185,10 @@ def yolov6l(class_names=CLASS_NAMES, device=DEVICE, img_size=640, conf_thres=0.2
     return create_model('yolov6l', class_names, device, img_size=img_size, conf_thres=conf_thres,
                         iou_thres=iou_thres, max_det=max_det)
 
+
+def yolov6lite_l(class_names=CLASS_NAMES, device=DEVICE, img_size=320, conf_thres=0.25, iou_thres=0.45, max_det=1000):
+    return create_model('yolov6lite_l', class_names, device, img_size=img_size, conf_thres=conf_thres,
+                        iou_thres=iou_thres, max_det=max_det)
 
 def custom(ckpt_path, class_names, device=DEVICE, img_size=640, conf_thres=0.25, iou_thres=0.45, max_det=1000):
     return Detector(ckpt_path, class_names, device, img_size=img_size, conf_thres=conf_thres,
